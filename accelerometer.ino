@@ -13,7 +13,7 @@ long counter = 0;
 
 void setup() {                
   Serial.begin(9600);
-  int led_pins[] = {2, 3, 4, 5, 6, 7, 8, 9, 10};
+  //int led_pins[] = {2, 3, 4, 5, 6, 7, 8, 9, 10};
   //for (int k = 2;k < 11;k++){
   //  pinMode(k,OUTPUT);
   //}
@@ -32,17 +32,17 @@ void loop() {
  
  //Should proabably switch to Serial.write()???
  Serial.print(acc_value_1);
- //Serial.print(',');
- //Serial.print(acc_value_2);
- //Serial.print(',');
- //Serial.print(acc_value_3);
+ Serial.print(',');
+ Serial.print(acc_value_2);
+ Serial.print(',');
+ Serial.print(acc_value_3);
  Serial.print('\n');
  delay(1);
  
  //Serial.println("=========");
 
 
- accel = acc_value_3;
+ //accel = acc_value_3;
 
  //for (long i = 0; i < 250L; i++){
  //  digitalWrite(9,HIGH);
@@ -52,7 +52,7 @@ void loop() {
 // }
 //tone(13,accel,100);
 //led_bank(accel);
-counter++;
+//counter++;
 }
 
 void led_bank(int accel){
