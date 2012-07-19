@@ -12,7 +12,7 @@ long counter = 0;
 
 
 void setup() {                
-  Serial.begin(9600);
+  Serial.begin(115200);
   //int led_pins[] = {2, 3, 4, 5, 6, 7, 8, 9, 10};
   //for (int k = 2;k < 11;k++){
   //  pinMode(k,OUTPUT);

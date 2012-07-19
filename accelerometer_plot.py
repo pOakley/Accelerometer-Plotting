@@ -31,15 +31,21 @@ class Scope:
         ax.legend([self.linex,self.liney,self.linez],['X-axis','Y-axis','Z-axis'])
         
         #Set the x and y graph limits
-        self.ax.set_ylim(-.1, 1000)
+        self.ax.set_ylim(-2,2)
         self.ax.set_xlim(0, self.maxt)
 
     def update(self, new_data):
     	#Update the plot
     	
+    	initial_values = [574.15, 587.94, 206.74]
+    	EU_per_g = 250.9 #This corresponds to 1.23 volts which is really high! Should be 0.8 Volts
+    	
+    	
     	#Split the string into 3 integers
     	new_data = map(int,new_data.split(','))
-
+	new_data = np.subtract(new_data, initial_values)
+	new_data = np.divide(new_data, EU_per_g)
+	print new_data
     	#Get the last timestep
         lastt = self.tdata[-1]
         
@@ -67,10 +73,20 @@ class Scope:
         self.linex.set_data(self.tdata, self.xdata)
         self.liney.set_data(self.tdata, self.ydata)
         self.linez.set_data(self.tdata, self.zdata)
+        
+        #Rescale the y-axis here. Doesn't quite work yet
+#       plotmax = max([self.xdata,self.ydata,self.zdata])
+#       plotmin = min([self.xdata,self.ydata,self.zdata])
+# 	self.ax.set_ylim(plotmin,plotmax)
+
+        
         return self.linex,self.liney,self.linez
 	#return self.linex
 
 def emitter():
+	#Set up some debugging / error handling stuff
+	read_attempts = 0
+	succesful_read = False
 
 	#Read all the data in the buffer (maxes out at 128 bytes)
 	a=ser.read(ser.inWaiting())
@@ -82,14 +98,24 @@ def emitter():
 	#Beware - this throws away all the other data
 	#print np.size(lines)
 	#print lines
-	buffer = lines[-2]
+	while succesful_read == False and read_attempts < 40000:
+		try:
+			buffer = lines[-2]
+			succesful_read = True
+		except:
+			read_attempts += 1
+	
+	if read_attempts >= 40000:
+		print 'Error reading serial data - exiting'
+		sys.exit()
+			
     	#new_data = map(int,buffer.split(','))
 	#buffer= new_data[0]
 	yield buffer
 
 
 #Set up the serial feed
-ser = sr.Serial('/dev/tty.usbmodem411', 9600)
+ser = sr.Serial('/dev/tty.usbmodem411', 115200)
 time.sleep(1)
 
 #Create the figure
@@ -104,7 +130,7 @@ ax = fig.add_subplot(111)
 scope = Scope(ax)
 
 # pass a generator in "emitter" to produce data for the update function every 2 milliseconds
-ani = animation.FuncAnimation(fig, scope.update, emitter, interval=50,
+ani = animation.FuncAnimation(fig, scope.update, emitter, interval=2,
     blit=True)
 
 #Create the plot window
