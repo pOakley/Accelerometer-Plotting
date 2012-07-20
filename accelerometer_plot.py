@@ -136,10 +136,9 @@ def emitter():
 	raw_data = ser.read(ser.inWaiting())
 	
 	#Split them based on new lines
-	lines = raw_data.split('\n')
-
-	#Select the second to last line (sometimes the very last line is empty)
-	#Beware - this throws away all the other data
+	lines = raw_data.split('\r')
+	print np.size(lines)
+	
 
 	if freshest_data_only == True:
 		while succesful_read == False and read_attempts < 40000:
@@ -168,10 +167,6 @@ def emitter():
 			print 'Error reading serial data - exiting'
 			sys.exit()
 	
-	
-			
-    	#new_data = map(int,buffer.split(','))
-	#buffer= new_data[0]
 	yield buffer
 
 
@@ -191,7 +186,7 @@ ax.set_ylabel('G Forces')
 scope = Scope(ax)
 
 # pass a generator in "emitter" to produce data for the update function every 2 milliseconds
-ani = animation.FuncAnimation(fig, scope.update, emitter, interval=2, blit=False)
+ani = animation.FuncAnimation(fig, scope.update, emitter, interval=1, blit=False)
 
 #Create the plot window
 plt.show()
