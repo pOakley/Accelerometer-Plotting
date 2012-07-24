@@ -37,8 +37,8 @@ class Scope:
     def update(self, new_data):
     	#Update the plot
     	#Calibration values
-    	initial_values = [574.15, 587.94, 206.74*2]
     	EU_per_g = 250.9 #This corresponds to 1.23 volts which is really high! Should be 0.8 Volts
+    	initial_values = [574.15, 587.94, 206.74+EU_per_g]
     	
     	#print new_data
     	#print np.size(new_data)
@@ -137,7 +137,7 @@ def emitter():
 	
 	#Split them based on new lines
 	lines = raw_data.split('\r')
-	print np.size(lines)
+	#print np.size(lines)
 	
 
 	if freshest_data_only == True:
