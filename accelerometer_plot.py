@@ -51,7 +51,13 @@ class Scope:
     	#print np.size(new_data_array)
     	
     	#Convert list of strings to list of integers
-    	new_data_array = map(int, new_data_array)
+    	try:
+	    	new_data_array = map(int, new_data_array)
+    	except:
+    		print "Bad data read: dumping data"
+    		new_data_array = [0, 0, 0]
+    		new_data_size = 1
+    	
     	#print new_data_array
     	#print np.size(new_data_array)
 
