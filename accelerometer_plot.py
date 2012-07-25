@@ -1,14 +1,15 @@
 import serial as sr
 import numpy as np
+import scipy as sc
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time
-
 class Scope:
-    def __init__(self, ax, maxt=1000, dt=1):
+    def __init__(self, ax, ax2, maxt=1000, dt=1):
         #Initialize the plot - run once
         self.ax = ax
+        self.ax2 = ax2
         self.dt = dt
         self.maxt = maxt
         
@@ -17,8 +18,10 @@ class Scope:
         self.xdata = [0]
         self.ydata = [0]
         self.zdata = [0]
+        self.fftdata = [0]
+        self.fftfreq = [0]
         
-        #Create the line
+        #Create the lines
         self.linex = Line2D(self.tdata, self.xdata,color='r')
         self.liney = Line2D(self.tdata, self.ydata,color='b')
         self.linez = Line2D(self.tdata, self.zdata,color='k')
@@ -26,6 +29,8 @@ class Scope:
         self.ax.add_line(self.liney)
         self.ax.add_line(self.linez)
 
+	self.linefft = Line2D(self.fftfreq, self.fftdata, color='k')
+	self.ax2.add_line(self.linefft)
         
         #Create the legend
         ax.legend([self.linex,self.liney,self.linez],['X-axis','Y-axis','Z-axis'])
@@ -79,8 +84,8 @@ class Scope:
 		
 	new_data_array = new_data_array / EU_per_g
 
-
-
+	
+	
 	#print new_data_array
 
     	#Get the last timestep
@@ -91,12 +96,28 @@ class Scope:
         
         #If the end of the graph is reached, reset the arrays
         if self.tdata[-1] > self.tdata[0] + self.maxt: # reset the arrays
+		#Compute the FFT of the time series
+		fft_data_raw = sc.fft(self.zdata)
+		#self.fftdata = abs(sc.concatenate((fft_data_raw[np.size(self.zdata)/2:],fft_data_raw[:np.size(self.zdata)/2])))
+		self.fftdata = abs(fft_data_raw[:np.size(self.zdata)/2])
+		#self.fftfreq = np.arange(-np.size(self.zdata)/2,np.size(self.zdata)/2,1)
+		self.fftfreq = np.arange(np.size(self.zdata)/2)
+
 		self.tdata = [self.tdata[-1]]
 		self.xdata = [self.xdata[-1]]
 		self.ydata = [self.ydata[-1]]
 		self.zdata = [self.zdata[-1]]
+		
 		self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+		#self.ax2.set_xlim(-500,500)
+		self.ax2.set_xlim(0,50)
+		
+		self.ax2.set_ylim(-1,max(self.fftdata[2:]))
+		
 		self.ax.figure.canvas.draw()
+		self.ax2.figure.canvas.draw()
+
+
 		
 
 	#Set the new t value to the dt more than the largest existing t value
@@ -116,20 +137,29 @@ class Scope:
         #print np.size(self.tdata)
         #print np.size(self.xdata)
         
+
+
+
         #print np.size(self.tdata), np.size(self.xdata), np.size(self.ydata), np.size(self.zdata)
         #Update the line
         self.linex.set_data(self.tdata, self.xdata)
         self.liney.set_data(self.tdata, self.ydata)
         self.linez.set_data(self.tdata, self.zdata)
+        self.linefft.set_data(self.fftfreq, self.fftdata)
         #print self.linex.get_data()
      
+     
+	     
         #Rescale the y-axis here. Doesn't quite work yet
 #       plotmax = max([self.xdata,self.ydata,self.zdata])
 #       plotmin = min([self.xdata,self.ydata,self.zdata])
 # 	self.ax.set_ylim(plotmin,plotmax)
 
+	
+
+
         #time.sleep(1)
-        return self.linex,self.liney,self.linez
+        return self.linex,self.liney,self.linez, self.linefft
 	#return self.linex
 	
 def emitter():
@@ -183,13 +213,20 @@ time.sleep(1)
 #Create the figure
 fig = plt.figure()
 
-#Create the main subplot
-ax = fig.add_subplot(111)
+#Create the time domain subplot
+ax = fig.add_subplot(211)
 ax.set_xlabel('Data Sample')
 ax.set_ylabel('G Forces')
 
+
+#Create the frequency domain subplot
+ax2 = fig.add_subplot(212)
+ax2.set_xlabel('Frequency')
+ax2.set_ylabel('Power')
+
+
 #Create the scope class
-scope = Scope(ax)
+scope = Scope(ax, ax2)
 
 # pass a generator in "emitter" to produce data for the update function every 2 milliseconds
 ani = animation.FuncAnimation(fig, scope.update, emitter, interval=1, blit=False)
