@@ -1,235 +1,294 @@
 import serial as sr
 import numpy as np
 import scipy as sc
+
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+from PyQt4 import QtCore, QtGui
+
+import threading
+import Queue
+
 import time
-class Scope:
-    def __init__(self, ax, ax2, maxt=1000, dt=1):
-        #Initialize the plot - run once
-        self.ax = ax
-        self.ax2 = ax2
-        self.dt = dt
-        self.maxt = maxt
-        
-        #Zero the data
-        self.tdata = [0]
-        self.xdata = [0]
-        self.ydata = [0]
-        self.zdata = [0]
-        self.fftdata = [0]
-        self.fftfreq = [0]
-        
-        #Create the lines
-        self.linex = Line2D(self.tdata, self.xdata,color='r')
-        self.liney = Line2D(self.tdata, self.ydata,color='b')
-        self.linez = Line2D(self.tdata, self.zdata,color='k')
-        self.ax.add_line(self.linex)
-        self.ax.add_line(self.liney)
-        self.ax.add_line(self.linez)
+import sys
+import random
 
-	self.linefft = Line2D(self.fftfreq, self.fftdata, color='k')
-	self.ax2.add_line(self.linefft)
-        
-        #Create the legend
-        ax.legend([self.linex,self.liney,self.linez],['X-axis','Y-axis','Z-axis'])
-        
-        #Set the x and y graph limits
-        self.ax.set_ylim(-2,2)
-        self.ax.set_xlim(0, self.maxt)
+class Data_Reader(threading.Thread):
 
-    def update(self, new_data):
-    	#Update the plot
-    	#Calibration values
-    	EU_per_g = 250.9 #This corresponds to 1.23 volts which is really high! Should be 0.8 Volts
-    	initial_values = [574.15, 587.94, 206.74+EU_per_g]
-    	
-    	#print new_data
-    	#print np.size(new_data)
-    	#Size of new data
-    	new_data_size = np.size(new_data)
-    	
-    	#Split into a list of single element strings - very confusing syntax
-    	new_data_array = ",".join(new_data).split(",")
-    	#print new_data_array
-    	#print np.size(new_data_array)
-    	
-    	#Convert list of strings to list of integers
-    	try:
-	    	new_data_array = map(int, new_data_array)
-    	except:
-    		print "Bad data read: dumping data"
-    		new_data_array = [0, 0, 0]
-    		new_data_size = 1
-    	
-    	#print new_data_array
-    	#print np.size(new_data_array)
-
-    	#Make list into a numpy array
-    	new_data_array = np.array(new_data_array)
-    	#print new_data_array
-    	#print np.size(new_data_array)
-    	
-    	#Reshape into a 2D array - size x 3
-    	new_data_array = new_data_array.reshape(new_data_size,3)
-    	#print new_data_array
-    	#print np.size(new_data_array)
-
-    	#Calibrate values
-    	for axis in range(3):
-		new_data_array[:,axis] -= initial_values[axis]
-	
-	#print new_data_array
+	def __init__(self, ser, buffer):
+		threading.Thread.__init__(self)
+		self._buffer = buffer
+		self._ser = ser
 		
-	new_data_array = new_data_array / EU_per_g
-
-	
-	
-	#print new_data_array
-
-    	#Get the last timestep
-        #lastt = self.tdata[-1]
-        #print 'Time stuff'
-        #print lastt
-        #print self.tdata
-        
-        #If the end of the graph is reached, reset the arrays
-        if self.tdata[-1] > self.tdata[0] + self.maxt: # reset the arrays
-		#Compute the FFT of the time series
-		fft_data_raw = sc.fft(self.zdata)
-		#self.fftdata = abs(sc.concatenate((fft_data_raw[np.size(self.zdata)/2:],fft_data_raw[:np.size(self.zdata)/2])))
-		self.fftdata = abs(fft_data_raw[:np.size(self.zdata)/2])
-		#self.fftfreq = np.arange(-np.size(self.zdata)/2,np.size(self.zdata)/2,1)
-		self.fftfreq = np.arange(np.size(self.zdata)/2)
-
-		self.tdata = [self.tdata[-1]]
-		self.xdata = [self.xdata[-1]]
-		self.ydata = [self.ydata[-1]]
-		self.zdata = [self.zdata[-1]]
+	def run(self):
+		while (True):
+			#Probably only want to read 3 bytes?
+			#raw_data = ser.read(ser.inWaiting())
+			raw_data = ''
+			for k in range(10):
+				raw_data = raw_data + str(random.randint(1,10))+','+str(random.randint(1,10))+','+str(random.randint(1,10))+','+str(random.randint(1,10))
+				raw_data = raw_data + '\r\n'
+				
+			self.process_data(raw_data)
+			self.move_data_to_buffer()
+			time.sleep(1)
+			
+	def process_data(self, raw_data):
+		"""Convert the raw data to a useful format"""
+		print 'raw data'
+		print raw_data
 		
-		self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
-		#self.ax2.set_xlim(-500,500)
-		self.ax2.set_xlim(0,50)
+		EU_per_g = 250.9 #This corresponds to 1.23 volts which is really high! Should be 0.8 Volts
+		initial_values = [130+EU_per_g, 338, 330] #Z,Y,X
 		
-		self.ax2.set_ylim(-1,max(self.fftdata[2:]))
+		#Each read of X/Y/Z are split into lines separated by carriage returns
+		lines = raw_data.split('\r\n')
+		print 'lines'
+		print lines
+		#Beginning and ending lines are sometimes messed up
+		good_lines = lines[3:-3]
+		new_data_size = len(good_lines)
 		
-		self.ax.figure.canvas.draw()
-		self.ax2.figure.canvas.draw()
+		good_data = ",".join(good_lines).split(",")
+		
+		print 'good lines'
+		print good_lines
+		#Split into X,Y,Z based on comma delimiter
+		#split_data = good_lines.split(",")
+		
+		#Convert list of strings to list of integers
+		try:
+			int_data = map(int, good_data)
+		except:
+			print "Bad data read: dumping data"
+			new_data_array = [0, 0, 0]
+			new_data_size = 1
 
-
+		print 'int data'
+		print int_data
+		
+		int_data = np.array(int_data)
+		int_data = int_data.reshape(new_data_size,4)
+		
+		print 'reshaped int data'
+		print int_data
+		new_g_data = int_data / EU_per_g
+		
+		print 'calibrated data'
+		print new_g_data
+		
+		self._buffer.put(new_g_data)
+		
+	def move_data_to_buffer(self):
+		"""Take the new data and put it into the buffer"""
+		pass
 		
 
-	#Set the new t value to the dt more than the largest existing t value
-        #t = self.tdata[-1] + self.dt
-        t = [i+1+self.tdata[-1] for i in range(new_data_size)]
-        
-        #Add to the existing time array
-        self.tdata.extend(t)
-	#print 'TDATA'
-        #print self.tdata
-        
-        #Update the existing y array with the value passed in to the function
-        self.xdata.extend(new_data_array[:,0])
-        self.ydata.extend(new_data_array[:,1])
-        self.zdata.extend(new_data_array[:,2])
-        #print 'XDATA'
-        #print np.size(self.tdata)
-        #print np.size(self.xdata)
-        
+class Data_Buffer():
 
-
-
-        #print np.size(self.tdata), np.size(self.xdata), np.size(self.ydata), np.size(self.zdata)
-        #Update the line
-        self.linex.set_data(self.tdata, self.xdata)
-        self.liney.set_data(self.tdata, self.ydata)
-        self.linez.set_data(self.tdata, self.zdata)
-        self.linefft.set_data(self.fftfreq, self.fftdata)
-        #print self.linex.get_data()
-     
-     
-	     
-        #Rescale the y-axis here. Doesn't quite work yet
-#       plotmax = max([self.xdata,self.ydata,self.zdata])
-#       plotmin = min([self.xdata,self.ydata,self.zdata])
-# 	self.ax.set_ylim(plotmin,plotmax)
-
-	
-
-
-        #time.sleep(1)
-        return self.linex,self.liney,self.linez, self.linefft
-	#return self.linex
-	
-def emitter():
-	#Set up some debugging / error handling stuff
-	read_attempts = 0
-	succesful_read = False
-	freshest_data_only = False
-	
-	#Read all the data in the buffer (maxes out at 128 bytes)
-	raw_data = ser.read(ser.inWaiting())
-	
-	#Split them based on new lines
-	lines = raw_data.split('\r')
-	#print np.size(lines)
-	
-
-	if freshest_data_only == True:
-		while succesful_read == False and read_attempts < 40000:
-			try:
-				buffer = lines[-2]
-				succesful_read = True
-			except:
-				read_attempts += 1
-				print 'Bad Read'
+	def __init__(self):
+		self._fifo = np.array(0)
 		
-		if read_attempts >= 40000:
-			print 'Error reading serial data - exiting'
-			sys.exit()
-	else:
-		while succesful_read == False and read_attempts < 40000:
-			try:
-				#The first and last are often only partials. The second element (index 1)
-				#seems to have weird problems too. Not sure what to make of that yet
-				buffer = lines[6:-2]
-				succesful_read = True
-			except:
-				read_attempts += 1
-				print 'Bad Read'
+	def put(self, new_data):
+		"""Put data in the buffer"""
 		
-		if read_attempts >= 40000:
-			print 'Error reading serial data - exiting'
-			sys.exit()
+		#print new_data
+		#self._fifo = np.append(self._fifo,new_data)
+		if np.size(self._fifo) > 1:
+			self._fifo = np.vstack((self._fifo,new_data))
+		else:
+			self._fifo = new_data
+		print 'fifo'
+		print self._fifo
+		
+	def get(self):
+		"""Get data from the buffer"""
+		
+		#Get the data to send out 
+		temp_buffer = self._fifo
+		print 'temp buffer'
+		#print temp_buffer
+		#Clear the buffer
+		#self.clear()
+		
+		#Send out the data
+		return temp_buffer
+		
+	def clear(self):
+		"""Clear all data in the FIFOs"""
+
+		self._fifo = np.array(0)
+		
+
+class Data_Plotter(QtGui.QMainWindow, FigureCanvas):
+
+	def __init__(self, buffer, reader):
+		"""Set up the plots"""
+		
+		#Set up the variables
+		self._buffer = buffer
+		self._reader = reader
+		
+		#Set up the Figures / GUI
+		self.main_gui = QtGui.QMainWindow() 
+		self.setup_window(self.main_gui)
+		
+		#Set up the timer
+		self.setup_timer()
+		self.main_gui.show()
+		
+		self._reader.start()
+		
+	def setup_timer(self):
+		"""Set up the timer to update the plot"""
+		
+		self._timer = self.fig.canvas.new_timer()
+		self._timer.interval = 100
+		self._timer.add_callback(self.plot_data)
+		self._timer.start()
+
+        
+
+		
+	def setup_window(self, MainWindow):
+		"""Set up the plotting window"""
+		
+		MainWindow.setObjectName(_fromUtf8("MainWindow"))
+		MainWindow.resize(895, 601)
+		self.centralwidget = QtGui.QWidget(MainWindow)
+		self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
+		self.plot_widget = QtGui.QWidget(self.centralwidget)
+		self.plot_widget.setGeometry(QtCore.QRect(29, 29, 681, 501))
+		self.plot_widget.setObjectName(_fromUtf8("plot_widget"))
+		self.quitButton = QtGui.QPushButton(self.centralwidget)
+		self.quitButton.setGeometry(QtCore.QRect(740, 390, 114, 32))
+		self.quitButton.setObjectName(_fromUtf8("quitButton"))
+		MainWindow.setCentralWidget(self.centralwidget)
+		self.menubar = QtGui.QMenuBar(MainWindow)
+		self.menubar.setGeometry(QtCore.QRect(0, 0, 895, 22))
+		self.menubar.setObjectName(_fromUtf8("menubar"))
+		MainWindow.setMenuBar(self.menubar)
+		self.statusbar = QtGui.QStatusBar(MainWindow)
+		self.statusbar.setObjectName(_fromUtf8("statusbar"))
+		MainWindow.setStatusBar(self.statusbar)
+		QtCore.QMetaObject.connectSlotsByName(MainWindow)
 	
-	yield buffer
+		MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "MainWindow", None, QtGui.QApplication.UnicodeUTF8))
+		self.quitButton.setText(QtGui.QApplication.translate("MainWindow", "Quit", None, QtGui.QApplication.UnicodeUTF8))
+
+		self.fig = Figure()
+        	self.canvas = FigureCanvas(self.fig)
+		self.canvas.setParent(self.plot_widget)
+
+		#Create the time domain subplot
+		ax = self.fig.add_subplot(211)
+		ax.set_xlabel('Data Sample')
+		ax.set_ylabel('G Forces')
+				
+		#Create the frequency domain subplot
+		ax2 = self.fig.add_subplot(212)
+		ax2.set_xlabel('Frequency')
+		ax2.set_ylabel('Power')
+	
+	        #Initialize the plot - run once
+		self.ax = ax
+		self.ax2 = ax2
+		
+		#Create the lines
+		self.linex = Line2D([0,1], [0,1],color='r',marker='.',linestyle='none')
+		self.liney = Line2D([0,1], [0,1],color='b',marker='.',linestyle='none')
+		self.linez = Line2D([0,1], [0,1],color='k',marker='.',linestyle='none')
+		self.ax.add_line(self.linex)
+		self.ax.add_line(self.liney)
+		self.ax.add_line(self.linez)
+	
+		self.linefft = Line2D([0,0], [0,0], color='k')
+		self.ax2.add_line(self.linefft)
+		
+		#Create the legend
+		ax.legend([self.linex,self.liney,self.linez],['X-axis','Y-axis','Z-axis'])
+		
+		#Set the x and y graph limits
+		#self.ax.set_ylim(-2,2)
+		#self.ax.set_xlim(0, 100)
+        	self.ax.set_ylim(-.05,.05)
+        	self.ax.set_xlim(-.05,.05)
+        
+        	#self.canvas.draw()
+		self.canvas.draw()
+
+	def plot_data(self):
+		"""update new data"""
+		
+		print '==========================================================================='
+		print 'updating plot'
+		print '==========================================================================='
+		#Get new data
+		data_to_plot = self._buffer.get()
+		#print data_to_plot
+		if data_to_plot.size > 1:
+			t = data_to_plot[:,0]
+			x = data_to_plot[:,1]
+			y = data_to_plot[:,2]
+			z = data_to_plot[:,3]
+
+			#Add this data to the plot
+			self.linex.set_data(t, x)
+			self.liney.set_data(t, y)
+			self.linez.set_data(t, z)
+	
+			#fft_data_raw = sc.fft(z)
+			#self.fftdata = abs(fft_data_raw[:np.size(z)/2])
+			#self.fftfreq = np.arange(np.size(z)/2)
+			fftfreq = [0,1]
+			fftdata = [1,0]
+			self.linefft.set_data(fftfreq, fftdata)
+			
+			#Modify the X-axis
+			
+			#Redraw the plots
+			self.canvas.draw()
 
 
-#Set up the serial feed
-ser = sr.Serial('/dev/tty.usbmodem411', 115200)
-time.sleep(1)
+def setup_serial():
+	#Set up the serial feed
+	ser = sr.Serial('/dev/tty.usbmodem411', 9600)
+	#ser = sr.Serial('/dev/tty.usbserial-A501CZ0O', 9600)
+	#ser = sr.Serial('/dev/tty.usbserial-A900XWJU', 9600)
 
-#Create the figure
-fig = plt.figure()
+	#Pause to make sure the connection is setup
+	time.sleep(1)
 
-#Create the time domain subplot
-ax = fig.add_subplot(211)
-ax.set_xlabel('Data Sample')
-ax.set_ylabel('G Forces')
+	return ser
+	
+	
+if __name__ == "__main__":
 
+	try:
+		_fromUtf8 = QtCore.QString.fromUtf8
+	except AttributeError:
+		_fromUtf8 = lambda s: s
+	
+	
+	#Set up the serial connection
+	#ser = setup_serial()
+	ser = ''
+	
+	#Create the instances of the data and buffer classes
+	buffer  = Data_Buffer()
+	#buffer = Queue()
+	
+	reader  = Data_Reader(ser,buffer)
+	
+	#Create the GUI
+	app = QtGui.QApplication(sys.argv)
+	plotter = Data_Plotter(buffer, reader)
+	sys.exit(app.exec_())		
 
-#Create the frequency domain subplot
-ax2 = fig.add_subplot(212)
-ax2.set_xlabel('Frequency')
-ax2.set_ylabel('Power')
-
-
-#Create the scope class
-scope = Scope(ax, ax2)
-
-# pass a generator in "emitter" to produce data for the update function every 2 milliseconds
-ani = animation.FuncAnimation(fig, scope.update, emitter, interval=1, blit=False)
-
-#Create the plot window
-plt.show()
+		
+	#Create the plot window
+	#plt.show()
