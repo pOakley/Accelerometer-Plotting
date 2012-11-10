@@ -8,7 +8,7 @@ int acc_value_3 = 0;
 String transmit_values;
 
 void setup() {                
-  Serial.begin(115200);
+  Serial.begin(9600);
   pinMode(11, OUTPUT);
   digitalWrite(11,HIGH);
 }
